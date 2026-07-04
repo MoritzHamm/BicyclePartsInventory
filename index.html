@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e1116">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Bike Parts</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#171c24; --panel-2:#1f2632; --line:#2a3340;
+    --text:#e7ecf3; --muted:#93a1b3; --accent:#5ed0a0; --accent-2:#4aa3ff;
+    --warn:#f0b64a; --danger:#ef6b6b; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--text);
+    font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    -webkit-user-select:none; user-select:none;
+  }
+  header{padding:14px 16px 8px}
+  h1{font-size:17px;margin:0;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:12px;margin-top:2px}
+  main{padding:0 16px 96px}
+  .view{display:none}
+  .view.active{display:block}
+
+  button{font:inherit;color:inherit;border:0;cursor:pointer}
+  .btn{background:var(--accent);color:#06231a;font-weight:600;border-radius:var(--radius);
+       padding:15px 16px;width:100%;font-size:16px}
+  .btn.secondary{background:var(--panel-2);color:var(--text);border:1px solid var(--line)}
+  .btn.blue{background:var(--accent-2);color:#02203f}
+  .btn.warn{background:var(--warn);color:#3a2a04}
+  .btn.danger{background:var(--danger);color:#3a0808}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.5}
+
+  #reader{width:100%;border-radius:var(--radius);overflow:hidden;background:#000;margin:4px 0 12px}
+  #reader video{border-radius:var(--radius)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+        padding:14px;margin:10px 0}
+  .bignum{font-size:44px;font-weight:800;letter-spacing:1px;line-height:1}
+  .pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;
+        letter-spacing:.6px;padding:3px 8px;border-radius:999px;vertical-align:middle}
+  .pill.storage{background:#20303f;color:#9cc4e6}
+  .pill.on_bike{background:#183a2c;color:#78e0b0}
+  .pill.retired{background:#3a2020;color:#e69c9c}
+  .muted{color:var(--muted)}
+  .row{display:flex;gap:8px;align-items:center}
+  .row.wrap{flex-wrap:wrap}
+  .grow{flex:1}
+  input,select{width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--line);
+        border-radius:10px;padding:12px;font:inherit;-webkit-user-select:text;user-select:text}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  .itemrow{display:flex;justify-content:space-between;align-items:center;gap:10px;
+        padding:12px 0;border-bottom:1px solid var(--line)}
+  .itemrow:last-child{border-bottom:0}
+  .idtag{font-weight:800;font-variant-numeric:tabular-nums}
+  .km{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+  .toast{position:fixed;left:16px;right:16px;bottom:78px;background:var(--panel-2);
+        border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:center;
+        opacity:0;transform:translateY(8px);transition:.18s;pointer-events:none;z-index:20}
+  .toast.show{opacity:1;transform:none}
+
+  nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--panel);
+      border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1;background:none;color:var(--muted);padding:12px 0 14px;font-size:12px;font-weight:600}
+  nav button .ic{display:block;font-size:20px;margin-bottom:2px}
+  nav button.active{color:var(--accent)}
+
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:30}
+  .backdrop.show{display:flex}
+  .sheet{background:var(--panel);border-radius:18px 18px 0 0;width:100%;padding:16px 16px 24px;
+        border-top:1px solid var(--line);max-height:88vh;overflow:auto}
+  .sheet h3{margin:2px 0 2px}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  a{color:var(--accent-2)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bike Parts Inventory</h1>
+  <div class="sub" id="status">Ready</div>
+</header>
+
+<main>
+  <!-- ---------------- INTAKE ---------------- -->
+  <section id="view-intake" class="view active">
+    <div id="reader"></div>
+    <button id="camBtn" class="btn">Start camera</button>
+    <button id="manualBtn" class="btn secondary" style="margin-top:8px">Add without barcode</button>
+
+    <div id="lastScan" class="card" style="display:none">
+      <div class="row"><div class="grow muted">Added to storage</div><span class="pill storage">storage</span></div>
+      <div class="bignum" id="lastId">—</div>
+      <div id="lastName" class="muted" style="margin-top:6px"></div>
+      <div id="lastMark" style="margin-top:10px;font-weight:600"></div>
+    </div>
+
+    <div class="hint" id="intakeHint">
+      Point the camera at a barcode. Each scan creates one physical item in <b>storage</b> and
+      gives it a number — write that number on the part. Scan the same box twice for two items.
+    </div>
+  </section>
+
+  <!-- ---------------- MANAGE ---------------- -->
+  <section id="view-manage" class="view">
+    <div class="row" style="margin:12px 0 6px">
+      <input id="filter" placeholder="Filter by number, product, bike…" oninput="renderItems()">
+    </div>
+    <div class="row" style="gap:6px;margin-bottom:8px">
+      <button class="btn secondary" style="padding:9px" onclick="setFilterState('')">All</button>
+      <button class="btn secondary" style="padding:9px" onclick="setFilterState('storage')">Storage</button>
+      <button class="btn secondary" style="padding:9px" onclick="setFilterState('on_bike')">On bike</button>
+      <button class="btn secondary" style="padding:9px" onclick="setFilterState('retired')">Retired</button>
+    </div>
+    <button class="btn secondary" onclick="loadItems()">Refresh</button>
+    <div id="itemList" class="card"><div class="muted">Loading…</div></div>
+  </section>
+</main>
+
+<!-- item action sheet -->
+<div class="backdrop" id="sheet">
+  <div class="sheet">
+    <h3 id="sheetTitle">Item</h3>
+    <div id="sheetSub" class="muted" style="font-size:13px;margin-bottom:8px"></div>
+
+    <div id="installFields">
+      <label>Bike</label>
+      <select id="bikeSelect"></select>
+      <label>Bike odometer now (km)</label>
+      <input id="odoInput" type="number" inputmode="decimal" placeholder="current odometer">
+      <div class="hint">Leave blank to keep the bike's stored reading.</div>
+    </div>
+
+    <label id="removeOdoLabel" style="display:none">Bike odometer now (km)</label>
+    <input id="removeOdo" type="number" inputmode="decimal" placeholder="current odometer" style="display:none">
+
+    <div style="height:12px"></div>
+    <div id="sheetActions" class="row wrap"></div>
+    <div style="height:8px"></div>
+    <button class="btn secondary" onclick="closeSheet()">Cancel</button>
+  </div>
+</div>
+
+<!-- manual add (no barcode) -->
+<div class="backdrop" id="manualSheet">
+  <div class="sheet">
+    <h3>Add without barcode</h3>
+    <div id="manualExisting">
+      <div class="hint">Pick an existing product — multiple identical parts share one entry.</div>
+      <input id="prodFilter" placeholder="Search products…" oninput="renderProducts()" style="margin-top:8px">
+      <div id="prodList" style="max-height:34vh;overflow:auto;margin-top:8px"></div>
+    </div>
+    <div id="manualNew" style="display:none">
+      <label>Brand</label><input id="mBrand" placeholder="optional">
+      <label>Product name</label><input id="mName" placeholder="e.g. Generic bottle cage">
+      <label>Category</label><input id="mCat" placeholder="e.g. bottle cage">
+    </div>
+    <label>Quantity</label>
+    <input id="mQty" type="number" inputmode="numeric" value="1" min="1">
+    <div style="height:12px"></div>
+    <div class="row">
+      <button id="mToggle" class="btn secondary" onclick="toggleManualMode()">New product</button>
+      <button class="btn" onclick="submitManual()">Add to storage</button>
+    </div>
+    <div style="height:8px"></div>
+    <button class="btn secondary" onclick="closeManual()">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<nav>
+  <button id="tab-intake" class="active" onclick="switchView('intake')"><span class="ic">▣</span>Scan</button>
+  <button id="tab-manage" onclick="switchView('manage')"><span class="ic">≣</span>Items</button>
+</nav>
+
+<script>
+/* ============================ CONFIG ============================ */
+/* Paste your Apps Script /exec URL and the same SECRET as in Code.gs */
+const API_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+const SECRET  = "CHANGE-ME-to-a-long-random-string";
+/* =============================================================== */
+
+const $ = s => document.querySelector(s);
+let ITEMS = [], BIKES = [], filterState = '', busy = false, current = null;
+
+/* ---- API ---- */
+async function apiGet(action, extra=''){
+  const url = `${API_URL}?action=${action}&key=${encodeURIComponent(SECRET)}${extra}`;
+  const r = await fetch(url); return r.json();
+}
+async function apiPost(payload){
+  const r = await fetch(API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},   // simple request → no preflight
+    body: JSON.stringify({ key: SECRET, ...payload })
+  });
+  return r.json();
+}
+
+/* ---- UI helpers ---- */
+function status(t){ $('#status').textContent = t; }
+function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove('show'),1600); }
+function beep(){ try{ const a=new (window.AudioContext||window.webkitAudioContext)();
+  const o=a.createOscillator(),g=a.createGain(); o.frequency.value=880; o.connect(g); g.connect(a.destination);
+  g.gain.setValueAtTime(.15,a.currentTime); o.start(); o.stop(a.currentTime+.09);
+  g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);}catch(e){} }
+function buzz(){ if(navigator.vibrate) navigator.vibrate(60); }
+
+function switchView(v){
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  $('#view-'+v).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  $('#tab-'+v).classList.add('active');
+  if(v==='manage') loadItems();
+}
+
+/* ---- Scanner ---- */
+let scanner=null, running=false;
+async function startCamera(){
+  if(running) return;
+  scanner = scanner || new Html5Qrcode('reader');
+  const fmts = [
+    Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.EAN_8,  Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.QR_CODE
+  ];
+  try{
+    await scanner.start({ facingMode:'environment' },
+      { fps:10, qrbox:{width:260,height:170}, formatsToSupport:fmts },
+      onScan, ()=>{});
+    running=true; $('#camBtn').textContent='Stop camera'; $('#camBtn').classList.add('secondary');
+    status('Scanning…');
+  }catch(e){ status('Camera error: '+e); toast('Could not start camera'); }
+}
+async function stopCamera(){
+  if(!running) return;
+  try{ await scanner.stop(); }catch(e){}
+  running=false; $('#camBtn').textContent='Start camera'; $('#camBtn').classList.remove('secondary');
+  status('Ready');
+}
+$('#camBtn').onclick = ()=> running ? stopCamera() : startCamera();
+
+async function onScan(text){
+  if(busy) return;                    // time-based cooldown, NOT value-based:
+  busy = true;                        // scanning the same box twice = two items
+  beep(); buzz(); status('Adding…');
+  try{
+    const res = await apiPost({ action:'intake', barcode:text });
+    if(!res.ok){ toast('Error: '+res.error); }
+    else {
+      const nameText = res.productKnown && res.product
+        ? `${res.product.brand||''} ${res.product.name||''}`.trim()
+        : `Unknown product (${text}) — describe later in the Products tab`;
+      showAdded(res.item_ids || [res.item_id], nameText);
+    }
+  }catch(e){ toast('Network error'); }
+  status(running?'Scanning…':'Ready');
+  setTimeout(()=>{ busy=false; }, 1300);   // brief pause before next scan
+}
+
+function showAdded(ids, nameText){
+  $('#lastScan').style.display='block';
+  $('#lastId').textContent = ids.length===1 ? ids[0] : `${ids[0]}–${ids[ids.length-1]}`;
+  $('#lastName').textContent = nameText;
+  $('#lastMark').innerHTML = ids.length===1
+    ? `✍️ Mark this part <b>#${ids[0]}</b>`
+    : `✍️ Mark these <b>#${ids[0]}</b> … <b>#${ids[ids.length-1]}</b> (${ids.length} items)`;
+}
+
+/* ---- Items / manage ---- */
+async function loadItems(){
+  $('#itemList').innerHTML = '<div class="muted">Loading…</div>';
+  const [i,b] = await Promise.all([ apiGet('items'), apiGet('bikes') ]);
+  ITEMS = (i.items||[]); BIKES = (b.bikes||[]);
+  renderItems();
+}
+function setFilterState(s){ filterState=s; renderItems(); }
+function renderItems(){
+  const q = ($('#filter').value||'').toLowerCase();
+  const list = ITEMS.filter(it=>{
+    if(filterState && it.state!==filterState) return false;
+    if(!q) return true;
+    return [it.item_id,it.product_name,it.brand,it.current_bike,it.barcode]
+      .join(' ').toLowerCase().includes(q);
+  });
+  if(!list.length){ $('#itemList').innerHTML='<div class="muted">No items.</div>'; return; }
+  $('#itemList').innerHTML = list.map(it=>{
+    const name = `${it.brand||''} ${it.product_name||''}`.trim() || `Unknown (${it.barcode})`;
+    const where = it.state==='on_bike' ? `on ${it.current_bike}` : it.state;
+    return `<div class="itemrow" onclick='openItem(${JSON.stringify(it).replace(/'/g,"&#39;")})'>
+      <div><div><span class="idtag">#${it.item_id}</span> &nbsp;${name}</div>
+        <div class="km">${where} · ${it.current_km} km</div></div>
+      <span class="pill ${it.state}">${it.state.replace('_',' ')}</span></div>`;
+  }).join('');
+}
+
+/* ---- action sheet ---- */
+function openItem(it){
+  current = it;
+  $('#sheetTitle').innerHTML = `#${it.item_id} · <span class="pill ${it.state}">${it.state.replace('_',' ')}</span>`;
+  const name = `${it.brand||''} ${it.product_name||''}`.trim() || `Unknown (${it.barcode})`;
+  $('#sheetSub').textContent = `${name} · ${it.current_km} km lifetime`;
+
+  const onBike = it.state==='on_bike';
+  $('#installFields').style.display = onBike ? 'none' : 'block';
+  $('#removeOdoLabel').style.display = onBike ? 'block' : 'none';
+  $('#removeOdo').style.display = onBike ? 'block' : 'none';
+  $('#odoInput').value=''; $('#removeOdo').value='';
+
+  $('#bikeSelect').innerHTML = BIKES.map(b=>`<option value="${b.name}">${b.name} (${b.odometer} km)</option>`).join('')
+      || '<option value="">— add a bike in the Bikes tab —</option>';
+
+  const acts = $('#sheetActions'); acts.innerHTML='';
+  if(!onBike){
+    acts.appendChild(mkBtn('Install on bike','btn blue', doInstall));
+  } else {
+    acts.appendChild(mkBtn('Remove (to storage)','btn warn', doRemove));
+  }
+  acts.appendChild(mkBtn('Retire','btn danger', doRetire));
+
+  $('#sheet').classList.add('show');
+}
+function mkBtn(label,cls,fn){ const b=document.createElement('button'); b.className=cls; b.style.flex='1';
+  b.textContent=label; b.onclick=fn; return b; }
+function closeSheet(){ $('#sheet').classList.remove('show'); current=null; }
+
+async function doInstall(){
+  const bike = $('#bikeSelect').value;
+  if(!bike){ toast('No bike selected'); return; }
+  await act({ action:'install', item_id:current.item_id, bike, odometer:$('#odoInput').value }, 'Installed');
+}
+async function doRemove(){
+  await act({ action:'remove', item_id:current.item_id, odometer:$('#removeOdo').value }, 'Removed to storage');
+}
+async function doRetire(){
+  await act({ action:'retire', item_id:current.item_id, odometer:$('#removeOdo').value }, 'Retired');
+}
+async function act(payload, okMsg){
+  const res = await apiPost(payload);
+  if(res.ok){ toast(okMsg); closeSheet(); loadItems(); }
+  else toast('Error: '+res.error);
+}
+
+/* ---- manual add (no barcode) ---- */
+let PRODUCTS=[], manualMode='existing', selectedKey=null;
+$('#manualBtn').onclick = openManual;
+
+async function openManual(){
+  manualMode='existing'; selectedKey=null;
+  $('#manualExisting').style.display='block'; $('#manualNew').style.display='none';
+  $('#mToggle').textContent='New product';
+  $('#mBrand').value=''; $('#mName').value=''; $('#mCat').value=''; $('#mQty').value='1'; $('#prodFilter').value='';
+  $('#prodList').innerHTML='<div class="muted" style="padding:8px 0">Loading…</div>';
+  $('#manualSheet').classList.add('show');
+  const r = await apiGet('products'); PRODUCTS = r.products||[]; renderProducts();
+}
+function closeManual(){ $('#manualSheet').classList.remove('show'); }
+function toggleManualMode(){
+  manualMode = manualMode==='existing' ? 'new' : 'existing';
+  const isNew = manualMode==='new';
+  $('#manualExisting').style.display = isNew?'none':'block';
+  $('#manualNew').style.display = isNew?'block':'none';
+  $('#mToggle').textContent = isNew?'Pick existing':'New product';
+  selectedKey=null;
+}
+function renderProducts(){
+  const q=($('#prodFilter').value||'').toLowerCase();
+  const list=PRODUCTS.filter(p=>[p.key,p.brand,p.name,p.category].join(' ').toLowerCase().includes(q));
+  if(!list.length){ $('#prodList').innerHTML='<div class="muted" style="padding:8px 0">No products yet — tap “New product”.</div>'; return; }
+  $('#prodList').innerHTML=list.map(p=>{
+    const nm=`${p.brand||''} ${p.name||''}`.trim()||p.key;
+    const sel=p.key===selectedKey?'style="border-color:var(--accent)"':'';
+    return `<div class="card" ${sel} style="padding:10px;margin:6px 0" onclick="selectProduct('${p.key}')">
+      <div>${nm}</div><div class="km">${p.category||''} · ${p.key}</div></div>`;
+  }).join('');
+}
+function selectProduct(k){ selectedKey=k; renderProducts(); }
+
+async function submitManual(){
+  const qty=Math.max(1,parseInt($('#mQty').value,10)||1);
+  let key=selectedKey, nameText='';
+  if(manualMode==='new'){
+    const brand=$('#mBrand').value.trim(), name=$('#mName').value.trim(), cat=$('#mCat').value.trim();
+    if(!name && !brand){ toast('Enter a product name'); return; }
+    const np=await apiPost({ action:'newProduct', brand, product_name:name, category:cat });
+    if(!np.ok){ toast('Error: '+np.error); return; }
+    key=np.key; nameText=`${brand} ${name}`.trim();
+  } else {
+    if(!key){ toast('Pick a product'); return; }
+    const p=PRODUCTS.find(x=>x.key===key)||{};
+    nameText=`${p.brand||''} ${p.name||''}`.trim()||key;
+  }
+  const res=await apiPost({ action:'intake', barcode:key, count:qty });
+  if(!res.ok){ toast('Error: '+res.error); return; }
+  closeManual(); switchView('intake');
+  showAdded(res.item_ids||[res.item_id], nameText);
+  toast(qty>1?`Added ${qty} items`:'Added');
+}
+
+/* ---- init ---- */
+if(API_URL.startsWith('PASTE')) status('⚠ Set API_URL & SECRET in index.html');
+</script>
+</body>
+</html>

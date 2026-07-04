@@ -1,0 +1,15 @@
+{
+  "name": "Bike Parts Inventory",
+  "short_name": "Bike Parts",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0e1116",
+  "theme_color": "#0e1116",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%235ed0a0'/%3E%3Ctext x='96' y='128' font-size='96' text-anchor='middle' font-family='sans-serif' fill='%2306231a'%3E%E2%96%A3%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
